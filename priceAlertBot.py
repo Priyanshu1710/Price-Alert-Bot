@@ -5,7 +5,7 @@
 # from telegram import Update
 # from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-# # Your Telegram Bot Token
+# # Telegram Bot Token
 # TOKEN = ' '
 # TOKEN_IDS = ['bitcoin', 'ethereum', 'cardano']
 
@@ -54,7 +54,7 @@
 # from telegram import Update, ReplyKeyboardMarkup
 # from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-# # Your Telegram Bot Token
+# # Telegram Bot Token
 # TOKEN = ' '
 # TOKEN_IDS = ['bitcoin', 'ethereum', 'cardano']
 
@@ -119,7 +119,7 @@
 # from apscheduler.schedulers.background import BackgroundScheduler
 # import logging
 
-# # Your Telegram Bot Token
+# # Telegram Bot Token
 # TOKEN = ' '
 # TOKEN_IDS = ['bitcoin', 'ethereum', 'cardano']
 # user_alerts = {}
@@ -350,7 +350,7 @@
 # import logging
 # import asyncio
 
-# # Your Telegram Bot Token
+# # Telegram Bot Token
 # TOKEN = ' '
 
 # # Token mappings with proper CoinGecko IDs
@@ -671,7 +671,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 import asyncio
 
-# Your Telegram Bot Token
+# Telegram Bot Token
 TOKEN = ' '
 
 # Token mappings with proper CoinGecko IDs
