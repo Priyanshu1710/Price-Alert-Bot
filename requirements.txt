@@ -1,0 +1,28 @@
+# requirements.txt
+python-telegram-bot==20.7
+requests==2.31.0
+APScheduler==3.10.4
+python-dotenv==1.0.0
+
+# Dockerfile
+FROM python:3.9-slim
+
+WORKDIR /app
+
+COPY requirements.txt .ß
+RUN pip install -r requirements.txt
+
+COPY . .
+
+CMD ["python", "bot.py"]
+
+# render.yaml
+services:
+  - type: web
+    name: telegram-crypto-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
