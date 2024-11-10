@@ -663,7 +663,8 @@
 # ****************************************** Version 5 (Final version) --> showin price and Added alert for low and high ************************************
 
 
-
+import os 
+from dotenv import load_dotenv
 import requests
 from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
@@ -671,8 +672,11 @@ from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 import asyncio
 
+# Load environment variables
+load_dotenv()
+
 # Telegram Bot Token
-TOKEN = ' '
+TOKEN = os.getenv('BOT_TOKEN')
 
 # Token mappings with proper CoinGecko IDs
 TOKEN_IDS = {
