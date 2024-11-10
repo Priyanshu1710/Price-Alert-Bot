@@ -670,27 +670,14 @@ from telegram import Update, ReplyKeyboardMarkup, ReplyKeyboardRemove
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, ConversationHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
-import asyncio 
-from flask import Flask
-from threading import Thread
+import asyncio
 
-# Initialize Flask app for health check
-app = Flask(__name__)
-
-@app.route('/')
-def health_check():
-    return "Bot is running!"
-
-def run_flask():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 # Load environment variables
 load_dotenv()
 
 # Telegram Bot Token
 TOKEN = os.getenv('BOT_TOKEN')
-if not TOKEN:
-    raise ValueError("No BOT_TOKEN found in environment variables")
 
 # Token mappings with proper CoinGecko IDs
 TOKEN_IDS = {
@@ -997,39 +984,6 @@ def check_alerts(app):
                     text=f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
                          f"Above your alert of ${alert['high_price']:,.2f}"
                 ))
-
-
-                # Keep-alive function
-async def keep_alive():
-    """Periodic task to keep the bot active"""
-    while True:
-        try:
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"Bot alive check at {current_time}")
-            
-            # Perform a simple price check to keep the bot active
-            token_id = 'bitcoin'  # Use any token from your list
-            price = await get_price_with_retry(token_id)
-            logger.info(f"Keep-alive price check: {token_id} = ${price if price else 'N/A'}")
-            
-            await asyncio.sleep(840)  # 14 minutes
-        except Exception as e:
-            logger.error(f"Error in keep_alive: {str(e)}")
-            await asyncio.sleep(60)
-
-# Web server handlers
-async def handle(request):
-    return web.Response(text="Bot is alive!")
-
-async def web_server():
-    app = web.Application()
-    app.router.add_get('/', handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    PORT = os.environ.get("PORT", 8080)
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
-
 
 def main():
     """Initialize and run the bot."""
