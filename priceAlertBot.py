@@ -1,5 +1,5 @@
 
-# ****************************************** Version 1 ß--> Price Alert Bot ************************************
+# ****************************************** Version 1 --> Price Alert Bot ************************************
 
 # import requests
 # from telegram import Update
@@ -694,10 +694,15 @@ if not TOKEN:
 
 # Token mappings with proper CoinGecko IDs
 TOKEN_IDS = {
-    'Bitcoin': 'bitcoin',
-    'Ethereum': 'ethereum',
-    'Solana': 'solana',
-    "OM":"mantra-dao",
+    'Bitcoin': 'BTCUSDT',
+    'Ethereum': 'ETHUSDT',
+    'Solana': 'SOLUSDT',
+    "OM":"OMUSDT",
+    "SUI":"SUIUSDT"
+    # 'Bitcoin': 'bitcoin',
+    # 'Ethereum': 'ethereum',
+    # 'Solana': 'solana',
+    # "OM":"mantra-dao",
 }
 
 user_alerts = {}
@@ -718,39 +723,68 @@ def get_token_keyboard():
     """Create keyboard with token options."""
     keyboard = [
         ["Bitcoin", "Ethereum"],
-        ["Solana","OM"],
+        ["Solana","OM","SUI"],
         ["🔙 Back to Menu"]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_price(token_id):
     """Get cryptocurrency price from CoinGecko API."""
-    url = f'https://api.coingecko.com/api/v3/simple/price?ids={token_id}&vs_currencies=usd'
+    # url = f'https://api.coingecko.com/api/v3/simple/price?ids={token_id}&vs_currencies=usd'
+    url = f'https://api.binance.com/api/v3/ticker/price?symbol={token_id}'
     headers = {
         'accept': 'application/json',
         'User-Agent': 'Mozilla/5.0'
     }
-    
+    logging.info(f"********************API Hitting in Get Price func*******************:- {url}")
+
     try:
         response = requests.get(url, headers=headers)
-        logging.info(f"API Response for {token_id}: Status={response.status_code}")
+        logging.info(f"Binance API Response for {token_id}: Status={response.status_code}")
         
-        if response.status_code == 429:  # Rate limit
-            logging.warning("Rate limit hit, waiting before retry")
+        if response.status_code != 200:
+            logging.error(f"Failed to fetch price for {token_id}: {response.text}")
             return None
             
         data = response.json()
-        if response.status_code != 200:
-            logging.error(f"Failed to fetch price for {token_id}: {data}")
+        if 'price' not in data:
+            logging.error(f"Invalid response format for {token_id}: {data}")
             return None
             
-        price = data.get(token_id, {}).get('usd')
-        logging.info(f"Price fetched for {token_id}: ${price}")
+        price = float(data['price'])
+        logging.info(f"Price fetched for {token_id}: ${price:,.2f}")
         return price
         
-    except Exception as e:
-        logging.error(f"Error retrieving price for {token_id}: {e}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Network error retrieving price for {token_id}: {e}")
         return None
+    except (ValueError, KeyError) as e:
+        logging.error(f"Error parsing price data for {token_id}: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Unexpected error retrieving price for {token_id}: {e}")
+        return None
+    
+    # try:
+    #     response = requests.get(url, headers=headers)
+    #     logging.info(f"API Response for {token_id}: Status={response.status_code}")
+        
+    #     if response.status_code == 429:  # Rate limit
+    #         logging.warning("Rate limit hit, waiting before retry")
+    #         return None
+            
+    #     data = response.json()
+    #     if response.status_code != 200:
+    #         logging.error(f"Failed to fetch price for {token_id}: {data}")
+    #         return None
+            
+    #     price = data.get(token_id, {}).get('usd')
+    #     logging.info(f"Price fetched for {token_id}: ${price}")
+    #     return price
+        
+    # except Exception as e:
+    #     logging.error(f"Error retrieving price for {token_id}: {e}")
+    #     return None
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start command handler."""
@@ -976,27 +1010,96 @@ async def handle_high_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return HIGH_PRICE
 
+# def check_alerts(app):
+#     """Check price alerts and notify users."""
+#     for chat_id, alerts in user_alerts.items():
+#         for alert in alerts:
+#             current_price = get_price(alert['token_id'])
+#             if not current_price:
+#                 continue
+                
+#             if current_price <= alert['low_price']:
+#                 asyncio.run(app.bot.send_message(
+#                     chat_id=chat_id,
+#                     text=f"⚠️ Low Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
+#                          f"Below your alert of ${alert['low_price']:,.2f}"
+#                 ))
+                
+#             elif current_price >= alert['high_price']:
+#                 asyncio.run(app.bot.send_message(
+#                     chat_id=chat_id,
+#                     text=f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
+#                          f"Above your alert of ${alert['high_price']:,.2f}"
+#                 ))
+
 def check_alerts(app):
-    """Check price alerts and notify users."""
-    for chat_id, alerts in user_alerts.items():
+    """Check price alerts and notify users with a single API request."""
+    if not user_alerts:  # If no alerts exist
+        return
+        
+    # Collect all unique symbols to check
+    symbols_to_check = set()
+    for alerts in user_alerts.values():
         for alert in alerts:
-            current_price = get_price(alert['token_id'])
-            if not current_price:
-                continue
+            symbol = alert['token_id'].upper()  # Convert to Binance format
+            symbols_to_check.add(symbol)
+    
+    if not symbols_to_check:
+        return
+        
+    # Create URL for batch price request
+    symbols_param = str(list(symbols_to_check)).replace("'", '"').replace(" ", "")  # Convert to JSON format
+    url = f'https://api.binance.com/api/v3/ticker/price?symbols={symbols_param}'
+    
+    headers = {
+        'accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0'
+    }
+    
+    logging.info(f"******************** API Hitting in check alert func ********************:-{url}")
+    try:
+        # Fetch all prices in one request
+        response = requests.get(url, headers=headers)
+        logging.info(f"Batch API Response Status={response.status_code}")
+        
+        if response.status_code != 200:
+            logging.error(f"Failed to fetch prices: {response.text}")
+            return
+            
+        data = response.json()
+        
+        # Create price lookup dictionary
+        prices = {item['symbol']: float(item['price']) for item in data}
+        
+        # Check alerts using fetched prices
+        for chat_id, alerts in user_alerts.items():
+            for alert in alerts:
+                symbol = alert['token_id'].upper()
+                current_price = prices.get(symbol)
                 
-            if current_price <= alert['low_price']:
-                asyncio.run(app.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"⚠️ Low Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
-                         f"Below your alert of ${alert['low_price']:,.2f}"
-                ))
-                
-            elif current_price >= alert['high_price']:
-                asyncio.run(app.bot.send_message(
-                    chat_id=chat_id,
-                    text=f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
-                         f"Above your alert of ${alert['high_price']:,.2f}"
-                ))
+                if not current_price:
+                    continue
+                    
+                if current_price <= alert['low_price']:
+                    asyncio.run(app.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"⚠️ Low Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
+                             f"Below your alert of ${alert['low_price']:,.2f}"
+                    ))
+                    
+                elif current_price >= alert['high_price']:
+                    asyncio.run(app.bot.send_message(
+                        chat_id=chat_id,
+                        text=f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
+                             f"Above your alert of ${alert['high_price']:,.2f}"
+                    ))
+                    
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Network error retrieving prices: {e}")
+    except (ValueError, KeyError) as e:
+        logging.error(f"Error parsing price data: {e}")
+    except Exception as e:
+        logging.error(f"Unexpected error in check_alerts: {e}")
 
 
                 # Keep-alive function
@@ -1036,6 +1139,7 @@ def main():
     # Set up logging
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        filename='botAlert.log',
         level=logging.INFO
     )
 
