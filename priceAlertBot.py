@@ -671,18 +671,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 import asyncio 
-from flask import Flask
-from threading import Thread
 
-# Initialize Flask app for health check
-app = Flask(__name__)
-
-@app.route('/')
-def health_check():
-    return "Bot is running!"
-
-def run_flask():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
 
 # Load environment variables
 load_dotenv()
@@ -694,11 +683,13 @@ if not TOKEN:
 
 # Token mappings with proper CoinGecko IDs
 TOKEN_IDS = {
+    # Mapping based on binance api 
     'Bitcoin': 'BTCUSDT',
     'Ethereum': 'ETHUSDT',
     'Solana': 'SOLUSDT',
     "OM":"OMUSDT",
     "SUI":"SUIUSDT"
+        # Mapping based on coingecko api 
     # 'Bitcoin': 'bitcoin',
     # 'Ethereum': 'ethereum',
     # 'Solana': 'solana',
@@ -707,8 +698,12 @@ TOKEN_IDS = {
 
 user_alerts = {}
 
-# Constants for ConversationHandler stages
-CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE = range(4)
+# # Constants for ConversationHandler stages
+# CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE = range(4)
+
+# Add this new constant for delete confirmation state
+CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE, DELETE_CONFIRMATION = range(5)
+
 
 def get_main_menu_keyboard():
     """Create the main menu keyboard."""
@@ -808,6 +803,41 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Help command handler."""
     await start(update, context)
 
+# async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Handle main menu selections."""
+#     choice = update.message.text
+
+#     if choice == "💰 Check Price":
+#         context.user_data['action'] = 'check_price' 
+#         await update.message.reply_text(
+#             "Select a cryptocurrency:",
+#             reply_markup=get_token_keyboard()
+#         )
+#         return TOKEN_SELECTION
+        
+#     elif choice == "⚠️ Set Alert":
+#         context.user_data['action'] = 'set_alert' 
+#         await update.message.reply_text(
+#             "Select a cryptocurrency for the alert:",
+#             reply_markup=get_token_keyboard()
+#         )
+#         return TOKEN_SELECTION
+        
+#     elif choice == "📊 View Alerts":
+#         await view_alerts(update, context)
+#         return CHOOSING
+        
+#     elif choice == "❌ Delete Alerts":
+#         await delete_alerts(update, context)
+#         return CHOOSING
+        
+#     elif choice == "ℹ️ Help":
+#         await help_command(update, context)
+#         return CHOOSING
+    
+#     return CHOOSING
+
+
 async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu selections."""
     choice = update.message.text
@@ -833,8 +863,7 @@ async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return CHOOSING
         
     elif choice == "❌ Delete Alerts":
-        await delete_alerts(update, context)
-        return CHOOSING
+        return await start_delete_process(update, context)
         
     elif choice == "ℹ️ Help":
         await help_command(update, context)
@@ -843,16 +872,79 @@ async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
     return CHOOSING
 
 
+# Add new functions for the delete process
+async def start_delete_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start the delete alert process."""
+    chat_id = update.message.chat_id
+    
+    if chat_id not in user_alerts or not user_alerts[chat_id]:
+        await update.message.reply_text(
+            "You don't have any alerts to delete.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return CHOOSING
+
+    # Show all alerts with numbers
+    alerts_text = "Select the alert number you want to delete:\n\n"
+    for i, alert in enumerate(user_alerts[chat_id], 1):
+        alerts_text += (
+            f"#{i}\n"
+            f"Token: {alert['token']}\n"
+            f"Low: ${alert['low_price']:,.2f}\n"
+            f"High: ${alert['high_price']:,.2f}\n\n"
+        )
+    
+    # Create keyboard with alert numbers and back button
+    keyboard = []
+    # Create rows with 3 numbers each
+    num_alerts = len(user_alerts[chat_id])
+    for i in range(0, num_alerts, 3):
+        row = [str(j) for j in range(i + 1, min(i + 4, num_alerts + 1))]
+        keyboard.append(row)
+    
+    keyboard.append(["Delete All"])
+    keyboard.append(["🔙 Back to Menu"])
+    
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    
+    await update.message.reply_text(alerts_text, reply_markup=reply_markup)
+    context.user_data['action'] = 'delete_alert'  # Set the context for delete action
+    return DELETE_CONFIRMATION
+
+
+
+# async def view_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """View alerts command handler."""
+#     chat_id = update.message.chat_id
+#     if chat_id in user_alerts and user_alerts[chat_id]:
+#         alerts_text = "Your active price alerts:\n\n"
+#         for i, alert in enumerate(user_alerts[chat_id], 1):
+#             alerts_text += (
+#                 f"{i}. {alert['token']}\n"
+#                 f"   Low: ${alert['low_price']:,.2f}\n"
+#                 f"   High: ${alert['high_price']:,.2f}\n\n"
+#             )
+#         await update.message.reply_text(
+#             alerts_text,
+#             reply_markup=get_main_menu_keyboard()
+#         )
+#     else:
+#         await update.message.reply_text(
+#             "You don't have any active alerts.",
+#             reply_markup=get_main_menu_keyboard()
+#         )
+
 async def view_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """View alerts command handler."""
+    """View alerts command handler with numbered list."""
     chat_id = update.message.chat_id
     if chat_id in user_alerts and user_alerts[chat_id]:
         alerts_text = "Your active price alerts:\n\n"
         for i, alert in enumerate(user_alerts[chat_id], 1):
             alerts_text += (
-                f"{i}. {alert['token']}\n"
-                f"   Low: ${alert['low_price']:,.2f}\n"
-                f"   High: ${alert['high_price']:,.2f}\n\n"
+                f"📍 Alert #{i}\n"
+                f"Token: {alert['token']}\n"
+                f"Low: ${alert['low_price']:,.2f}\n"
+                f"High: ${alert['high_price']:,.2f}\n\n"
             )
         await update.message.reply_text(
             alerts_text,
@@ -864,20 +956,96 @@ async def view_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard()
         )
 
+# async def delete_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Delete alerts command handler."""
+#     chat_id = update.message.chat_id
+#     if chat_id in user_alerts:
+#         user_alerts[chat_id] = []
+#         await update.message.reply_text(
+#             "All your alerts have been deleted.",
+#             reply_markup=get_main_menu_keyboard()
+#         )
+#     else:
+#         await update.message.reply_text(
+#             "You don't have any alerts to delete.",
+#             reply_markup=get_main_menu_keyboard()
+#         )
+
 async def delete_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Delete alerts command handler."""
+    """Delete alerts command handler with selection."""
     chat_id = update.message.chat_id
-    if chat_id in user_alerts:
-        user_alerts[chat_id] = []
-        await update.message.reply_text(
-            "All your alerts have been deleted.",
-            reply_markup=get_main_menu_keyboard()
-        )
-    else:
+    
+    if chat_id not in user_alerts or not user_alerts[chat_id]:
         await update.message.reply_text(
             "You don't have any alerts to delete.",
             reply_markup=get_main_menu_keyboard()
         )
+        return CHOOSING
+
+    # Show all alerts with numbers
+    alerts_text = "Select the alert number you want to delete:\n\n"
+    for i, alert in enumerate(user_alerts[chat_id], 1):
+        alerts_text += (
+            f"#{i}\n"
+            f"Token: {alert['token']}\n"
+            f"Low: ${alert['low_price']:,.2f}\n"
+            f"High: ${alert['high_price']:,.2f}\n\n"
+        )
+    
+    # Create keyboard with alert numbers and back button
+    keyboard = [[str(i)] for i in range(1, len(user_alerts[chat_id]) + 1)]
+    keyboard.append(["Delete All"])
+    keyboard.append(["🔙 Back to Menu"])
+    
+    await update.message.reply_text(
+        alerts_text,
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    )
+    return DELETE_CONFIRMATION
+
+async def handle_delete_confirmation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the deletion confirmation."""
+    choice = update.message.text
+    chat_id = update.message.chat_id
+
+    if choice == "🔙 Back to Menu":
+        await update.message.reply_text(
+            "Returned to main menu.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return CHOOSING
+
+    if choice == "Delete All":
+        user_alerts[chat_id] = []
+        await update.message.reply_text(
+            "All alerts have been deleted.",
+            reply_markup=get_main_menu_keyboard()
+        )
+        return CHOOSING
+
+    try:
+        alert_index = int(choice) - 1
+        if chat_id in user_alerts and 0 <= alert_index < len(user_alerts[chat_id]):
+            deleted_alert = user_alerts[chat_id].pop(alert_index)
+            await update.message.reply_text(
+                f"✅ Alert deleted successfully!\n\n"
+                f"Deleted alert for {deleted_alert['token']}\n"
+                f"Low: ${deleted_alert['low_price']:,.2f}\n"
+                f"High: ${deleted_alert['high_price']:,.2f}",
+                reply_markup=get_main_menu_keyboard()
+            )
+        else:
+            await update.message.reply_text(
+                "❌ Invalid alert number. Please select a valid number.",
+                reply_markup=get_main_menu_keyboard()
+            )
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Invalid input. Please select a number from the list.",
+            reply_markup=get_main_menu_keyboard()
+        )
+    
+    return CHOOSING
 
 async def handle_token_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle token selection."""
@@ -1010,28 +1178,6 @@ async def handle_high_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return HIGH_PRICE
 
-# def check_alerts(app):
-#     """Check price alerts and notify users."""
-#     for chat_id, alerts in user_alerts.items():
-#         for alert in alerts:
-#             current_price = get_price(alert['token_id'])
-#             if not current_price:
-#                 continue
-                
-#             if current_price <= alert['low_price']:
-#                 asyncio.run(app.bot.send_message(
-#                     chat_id=chat_id,
-#                     text=f"⚠️ Low Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
-#                          f"Below your alert of ${alert['low_price']:,.2f}"
-#                 ))
-                
-#             elif current_price >= alert['high_price']:
-#                 asyncio.run(app.bot.send_message(
-#                     chat_id=chat_id,
-#                     text=f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
-#                          f"Above your alert of ${alert['high_price']:,.2f}"
-#                 ))
-
 def check_alerts(app):
     """Check price alerts and notify users with a single API request."""
     if not user_alerts:  # If no alerts exist
@@ -1103,37 +1249,78 @@ def check_alerts(app):
 
 
                 # Keep-alive function
-async def keep_alive():
-    """Periodic task to keep the bot active"""
-    while True:
-        try:
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            logger.info(f"Bot alive check at {current_time}")
-            
-            # Perform a simple price check to keep the bot active
-            token_id = 'bitcoin'  # Use any token from your list
-            price = await get_price_with_retry(token_id)
-            logger.info(f"Keep-alive price check: {token_id} = ${price if price else 'N/A'}")
-            
-            await asyncio.sleep(840)  # 14 minutes
-        except Exception as e:
-            logger.error(f"Error in keep_alive: {str(e)}")
-            await asyncio.sleep(60)
 
-# Web server handlers
-async def handle(request):
-    return web.Response(text="Bot is alive!")
+# def main():
+#     """Initialize and run the bot."""
+#     # Set up logging
+#     logging.basicConfig(
+#         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#         filename='botAlert.log',
+#         level=logging.INFO
+#     )
 
-async def web_server():
-    app = web.Application()
-    app.router.add_get('/', handle)
-    runner = web.AppRunner(app)
-    await runner.setup()
-    PORT = os.environ.get("PORT", 8080)
-    site = web.TCPSite(runner, '0.0.0.0', PORT)
-    await site.start()
+#     # Initialize the bot
+#     app = ApplicationBuilder().token(TOKEN).build()
+
+#     # Create conversation handler
+#     conv_handler = ConversationHandler(
+#         entry_points=[
+#             CommandHandler("start", start),
+#             CommandHandler("help", help_command)
+#         ],
+#         states={
+#             CHOOSING: [
+#                 MessageHandler(
+#                     filters.TEXT & ~filters.COMMAND,
+#                     handle_menu_choice
+#                 )
+#             ],
+#             TOKEN_SELECTION: [
+#                 MessageHandler(
+#                     filters.TEXT & ~filters.COMMAND,
+#                     handle_token_selection
+#                 )
+#             ],
+#             LOW_PRICE: [
+#                 MessageHandler(
+#                     filters.TEXT & ~filters.COMMAND,
+#                     handle_low_price
+#                 )
+#             ],
+#             HIGH_PRICE: [
+#                 MessageHandler(
+#                     filters.TEXT & ~filters.COMMAND,
+#                     handle_high_price
+#                 )
+#             ],
+#             DELETE_CONFIRMATION: [
+#                 MessageHandler(
+#                     filters.TEXT & ~filters.COMMAND,
+#                     handle_delete_confirmation
+#                 )
+#             ]
+#         },
+#         fallbacks=[
+#             CommandHandler("start", start),
+#             CommandHandler("help", help_command)
+#         ]
+#     )
+
+#     # Add the conversation handler
+#     app.add_handler(conv_handler)
+
+#     # Set up the price check scheduler
+#     scheduler = BackgroundScheduler()
+#     scheduler.add_job(lambda: check_alerts(app), 'interval', minutes=1)
+#     scheduler.start()
+
+#     # Start the bot
+#     print("Bot is running...")
+#     app.run_polling()
 
 
+
+# Update your main function's conversation handler:
 def main():
     """Initialize and run the bot."""
     # Set up logging
@@ -1176,12 +1363,20 @@ def main():
                     filters.TEXT & ~filters.COMMAND,
                     handle_high_price
                 )
+            ],
+            DELETE_CONFIRMATION: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    handle_delete_confirmation
+                )
             ]
         },
         fallbacks=[
             CommandHandler("start", start),
             CommandHandler("help", help_command)
-        ]
+        ],
+        name='my_conversation',
+        persistent=False
     )
 
     # Add the conversation handler
