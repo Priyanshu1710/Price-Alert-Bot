@@ -24,8 +24,9 @@ Default tokens supported:
 
 1. Clone the repository
 ```bash
-git clone [https://github.com/Priyanshu1710/Price-Alert-Bot.git]
-cd crypto-price-alert-bot
+git clone https://github.com/Priyanshu1710/Price-Alert-Bot.git
+cd Price-Alert-Bot
+
 ```
 
 2. Install required packages
