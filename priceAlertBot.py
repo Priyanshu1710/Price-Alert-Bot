@@ -671,6 +671,8 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from apscheduler.schedulers.background import BackgroundScheduler
 import logging
 import asyncio 
+import json
+import os
 
 
 # Load environment variables
@@ -702,26 +704,157 @@ user_alerts = {}
 # CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE = range(4)
 
 # Add this new constant for delete confirmation state
-CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE, DELETE_CONFIRMATION = range(5)
+# CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE, DELETE_CONFIRMATION = range(5)
 
+# First, add a new state for custom token addition
+CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE, DELETE_CONFIRMATION, ADD_TOKEN_NAME, ADD_TOKEN_SYMBOL = range(7)
+
+
+# def get_main_menu_keyboard():
+#     """Create the main menu keyboard."""
+#     keyboard = [
+#         ["💰 Check Price", "⚠️ Set Alert"],
+#         ["📊 View Alerts", "❌ Delete Alerts"],
+#         ["ℹ️ Help"]
+#     ]
+#     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def get_main_menu_keyboard():
     """Create the main menu keyboard."""
     keyboard = [
         ["💰 Check Price", "⚠️ Set Alert"],
         ["📊 View Alerts", "❌ Delete Alerts"],
-        ["ℹ️ Help"]
+        ["➕ Add Custom Token", "ℹ️ Help"]  # Added new option
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+
+# def get_token_keyboard():
+#     """Create keyboard with token options."""
+#     keyboard = [
+#         ["Bitcoin", "Ethereum"],
+#         ["Solana","OM","SUI"],
+#         ["🔙 Back to Menu"]
+#     ]
+#     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
 def get_token_keyboard():
     """Create keyboard with token options."""
-    keyboard = [
-        ["Bitcoin", "Ethereum"],
-        ["Solana","OM","SUI"],
-        ["🔙 Back to Menu"]
-    ]
-    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    # Create rows of 3 tokens each
+    token_rows = []
+    tokens = list(TOKEN_IDS.keys())
+    for i in range(0, len(tokens), 3):
+        token_rows.append(tokens[i:i+3])
+    token_rows.append(["🔙 Back to Menu"])
+    return ReplyKeyboardMarkup(token_rows, resize_keyboard=True)
+
+# Add these new functions for custom token handling
+async def start_add_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start the process of adding a custom token."""
+    await update.message.reply_text(
+        "Please enter the display name for your token (e.g., Bitcoin):",
+        reply_markup=ReplyKeyboardMarkup([["🔙 Back to Menu"]], resize_keyboard=True)
+    )
+    return ADD_TOKEN_NAME
+
+async def handle_token_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the custom token name input."""
+    if update.message.text == "🔙 Back to Menu":
+        await start(update, context)
+        return CHOOSING
+
+    token_name = update.message.text
+    if token_name in TOKEN_IDS:
+        await update.message.reply_text(
+            f"Token name '{token_name}' already exists. Please choose a different name.",
+            reply_markup=ReplyKeyboardMarkup([["🔙 Back to Menu"]], resize_keyboard=True)
+        )
+        return ADD_TOKEN_NAME
+
+    context.user_data['custom_token_name'] = token_name
+    await update.message.reply_text(
+        f"Now enter the Binance trading symbol for {token_name} (e.g., BTCUSDT):\n\n"
+        "Make sure to:\n"
+        "1. Use uppercase letters\n"
+        "2. Include USDT suffix\n"
+        "3. Check Binance for correct symbol",
+        reply_markup=ReplyKeyboardMarkup([["🔙 Back to Menu"]], resize_keyboard=True)
+    )
+    return ADD_TOKEN_SYMBOL
+
+
+async def handle_token_symbol(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the Binance symbol input and validate it."""
+    if update.message.text == "🔙 Back to Menu":
+        await start(update, context)
+        return CHOOSING
+
+    symbol = update.message.text.upper()
+    token_name = context.user_data.get('custom_token_name')
+
+    # Validate the symbol with Binance API
+    url = f'https://api.binance.com/api/v3/ticker/price?symbol={symbol}'
+    headers = {
+        'accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0'
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            # Symbol is valid, add to TOKEN_IDS
+            TOKEN_IDS[token_name] = symbol
+            
+            await update.message.reply_text(
+                f"✅ Successfully added custom token:\n"
+                f"Name: {token_name}\n"
+                f"Symbol: {symbol}\n\n"
+                f"You can now use this token for price checks and alerts!",
+                reply_markup=get_main_menu_keyboard()
+            )
+            
+            # Save updated tokens to file (optional)
+            save_custom_tokens()
+            
+            return CHOOSING
+        else:
+            await update.message.reply_text(
+                f"❌ Invalid symbol. '{symbol}' was not found on Binance.\n"
+                "Please check the symbol and try again.",
+                reply_markup=ReplyKeyboardMarkup([["🔙 Back to Menu"]], resize_keyboard=True)
+            )
+            return ADD_TOKEN_SYMBOL
+            
+    except Exception as e:
+        logging.error(f"Error validating symbol: {e}")
+        await update.message.reply_text(
+            "Error validating symbol. Please try again.",
+            reply_markup=ReplyKeyboardMarkup([["🔙 Back to Menu"]], resize_keyboard=True)
+        )
+        return ADD_TOKEN_SYMBOL
+
+
+# Function to save custom tokens (optional)
+def save_custom_tokens():
+    """Save custom tokens to a file."""
+    try:
+        with open('custom_tokens.json', 'w') as f:
+            json.dump(TOKEN_IDS, f, indent=4)
+    except Exception as e:
+        logging.error(f"Error saving custom tokens: {e}")
+
+# Function to load custom tokens (optional)
+def load_custom_tokens():
+    """Load custom tokens from file."""
+    try:
+        if os.path.exists('custom_tokens.json'):
+            with open('custom_tokens.json', 'r') as f:
+                loaded_tokens = json.load(f)
+                TOKEN_IDS.update(loaded_tokens)
+    except Exception as e:
+        logging.error(f"Error loading custom tokens: {e}")
+
+
 
 def get_price(token_id):
     """Get cryptocurrency price from CoinGecko API."""
@@ -838,6 +971,41 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #     return CHOOSING
 
 
+# async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#     """Handle main menu selections."""
+#     choice = update.message.text
+
+#     if choice == "💰 Check Price":
+#         context.user_data['action'] = 'check_price' 
+#         await update.message.reply_text(
+#             "Select a cryptocurrency:",
+#             reply_markup=get_token_keyboard()
+#         )
+#         return TOKEN_SELECTION
+        
+#     elif choice == "⚠️ Set Alert":
+#         context.user_data['action'] = 'set_alert' 
+#         await update.message.reply_text(
+#             "Select a cryptocurrency for the alert:",
+#             reply_markup=get_token_keyboard()
+#         )
+#         return TOKEN_SELECTION
+        
+#     elif choice == "📊 View Alerts":
+#         await view_alerts(update, context)
+#         return CHOOSING
+        
+#     elif choice == "❌ Delete Alerts":
+#         return await start_delete_process(update, context)
+        
+#     elif choice == "ℹ️ Help":
+#         await help_command(update, context)
+#         return CHOOSING
+    
+#     return CHOOSING
+
+
+# Update handle_menu_choice to include new option
 async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu selections."""
     choice = update.message.text
@@ -864,6 +1032,9 @@ async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         
     elif choice == "❌ Delete Alerts":
         return await start_delete_process(update, context)
+        
+    elif choice == "➕ Add Custom Token":
+        return await start_add_token(update, context)
         
     elif choice == "ℹ️ Help":
         await help_command(update, context)
@@ -1330,6 +1501,9 @@ def main():
         level=logging.INFO
     )
 
+# Load custom tokens at startup
+    load_custom_tokens()
+
     # Initialize the bot
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -1368,6 +1542,18 @@ def main():
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND,
                     handle_delete_confirmation
+                )
+            ],
+            ADD_TOKEN_NAME: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    handle_token_name
+                )
+            ],
+            ADD_TOKEN_SYMBOL: [
+                MessageHandler(
+                    filters.TEXT & ~filters.COMMAND,
+                    handle_token_symbol
                 )
             ]
         },
