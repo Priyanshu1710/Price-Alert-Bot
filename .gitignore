@@ -7,3 +7,4 @@ venv/
 .idea/
 custom_tokens.json
 user_custom_tokens.json
+alerts.json

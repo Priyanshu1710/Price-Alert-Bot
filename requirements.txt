@@ -1,11 +1,6 @@
-# Core dependencies
 python-telegram-bot==20.7
 python-dotenv==1.0.0
 requests==2.31.0
 APScheduler==3.10.4
-
-# Async support
-asyncio==3.4.3
-
-# Utils
-logging==0.4.9.6
+certifi==2023.11.17
+aiohttp==3.9.1

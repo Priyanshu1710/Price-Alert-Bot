@@ -1,5 +1,5 @@
 
-# ****************************************** Version 1.0.1  --> Price Alert Bot ************************************
+# # ****************************************** Version 1.0.1  --> Price Alert Bot ************************************
 
 import os 
 from dotenv import load_dotenv
@@ -11,7 +11,6 @@ import logging
 import asyncio
 import json
 
-
 # Load environment variables
 load_dotenv()
 
@@ -20,7 +19,7 @@ TOKEN = os.getenv('BOT_TOKEN')
 if not TOKEN:
     raise ValueError("No BOT_TOKEN found in environment variables")
 
-# Token mappings with proper CoinGecko IDs
+# # Token mappings with proper CoinGecko IDs
 DEFAULT_TOKENS = {
     # Mapping based on binance api 
     'Bitcoin': 'BTCUSDT',
@@ -39,7 +38,6 @@ user_alerts = {}
 
 # Store user-specific custom tokens
 user_custom_tokens = {}  # Format: {user_id: {token_name: symbol}}
-
 
 # Add new state for token deletion
 CHOOSING, TOKEN_SELECTION, LOW_PRICE, HIGH_PRICE, DELETE_CONFIRMATION, ADD_TOKEN_NAME, ADD_TOKEN_SYMBOL, DELETE_TOKEN = range(8)
@@ -90,7 +88,6 @@ def get_token_keyboard(user_id):
     token_rows.append(["🔙 Back to Menu"])
     return ReplyKeyboardMarkup(token_rows, resize_keyboard=True)
 
-# Add these new functions for custom token handling
 async def start_add_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start the process of adding a custom token."""
     await update.message.reply_text(
@@ -99,7 +96,6 @@ async def start_add_token(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     return ADD_TOKEN_NAME
 
-# Also update any other functions that use get_token_keyboard
 async def handle_token_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle the custom token name input."""
     user_id = update.effective_user.id  # Get user ID
@@ -385,13 +381,13 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle main menu selections."""
     choice = update.message.text
-    user_id = update.effective_user.id  # Get user ID
+    user_id = update.effective_user.id
 
     if choice == "💰 Check Price":
         context.user_data['action'] = 'check_price' 
         await update.message.reply_text(
             "Select a cryptocurrency:",
-            reply_markup=get_token_keyboard(user_id)  # Pass user_id
+        reply_markup=get_token_keyboard(user_id)
         )
         return TOKEN_SELECTION
         
@@ -399,7 +395,7 @@ async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data['action'] = 'set_alert' 
         await update.message.reply_text(
             "Select a cryptocurrency for the alert:",
-            reply_markup=get_token_keyboard(user_id)  # Pass user_id
+            reply_markup=get_token_keyboard(user_id)
         )
         return TOKEN_SELECTION
         
@@ -420,67 +416,20 @@ async def handle_menu_choice(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await help_command(update, context)
         return CHOOSING
     
-    return CHOOSING
-
-# Add new functions for the delete process
-async def start_delete_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Start the delete alert process."""
-    chat_id = update.message.chat_id
-    
-    if chat_id not in user_alerts or not user_alerts[chat_id]:
+    else:
         await update.message.reply_text(
-            "You don't have any alerts to delete.",
+            "Please select an option from the menu below:",
             reply_markup=get_main_menu_keyboard()
         )
         return CHOOSING
 
-    # Show all alerts with numbers
-    alerts_text = "Select the alert number you want to delete:\n\n"
-    for i, alert in enumerate(user_alerts[chat_id], 1):
-        alerts_text += (
-            f"#{i}\n"
-            f"Token: {alert['token']}\n"
-            f"Low: ${alert['low_price']:,.2f}\n"
-            f"High: ${alert['high_price']:,.2f}\n\n"
-        )
-    
-    # Create keyboard with alert numbers and back button
-    keyboard = []
-    # Create rows with 3 numbers each
-    num_alerts = len(user_alerts[chat_id])
-    for i in range(0, num_alerts, 3):
-        row = [str(j) for j in range(i + 1, min(i + 4, num_alerts + 1))]
-        keyboard.append(row)
-    
-    keyboard.append(["Delete All"])
-    keyboard.append(["🔙 Back to Menu"])
-    
-    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-    
-    await update.message.reply_text(alerts_text, reply_markup=reply_markup)
-    context.user_data['action'] = 'delete_alert'  # Set the context for delete action
-    return DELETE_CONFIRMATION
-
-# Helper function to validate Binance symbol
-async def validate_binance_symbol(symbol):
-    """Validate if a symbol exists on Binance."""
-    url = f'https://api.binance.com/api/v3/ticker/price?symbol={symbol}'
-    headers = {
-        'accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-    
-    try:
-        response = requests.get(url, headers=headers)
-        return response.status_code == 200
-    except:
-        return False
-
-# Update view_alerts function
 async def view_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """View alerts command handler."""
     user_id = update.effective_user.id
     chat_id = update.message.chat_id
+    
+    logging.info(f"Viewing alerts for chat_id {chat_id}")
+    logging.info(f"Current alerts state: {user_alerts}")
     
     if chat_id in user_alerts and user_alerts[chat_id]:
         alerts_text = "Your active price alerts:\n\n"
@@ -502,13 +451,14 @@ async def view_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu_keyboard()
         )
     else:
+        logging.info(f"No alerts found for chat_id {chat_id}")
         await update.message.reply_text(
             "You don't have any active alerts.",
             reply_markup=get_main_menu_keyboard()
         )
 
-async def delete_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Delete alerts command handler with selection."""
+async def start_delete_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Start the delete alert process."""
     chat_id = update.message.chat_id
     
     if chat_id not in user_alerts or not user_alerts[chat_id]:
@@ -553,6 +503,7 @@ async def handle_delete_confirmation(update: Update, context: ContextTypes.DEFAU
 
     if choice == "Delete All":
         user_alerts[chat_id] = []
+        save_alerts()  # Save after deleting all alerts
         await update.message.reply_text(
             "All alerts have been deleted.",
             reply_markup=get_main_menu_keyboard()
@@ -563,6 +514,7 @@ async def handle_delete_confirmation(update: Update, context: ContextTypes.DEFAU
         alert_index = int(choice) - 1
         if chat_id in user_alerts and 0 <= alert_index < len(user_alerts[chat_id]):
             deleted_alert = user_alerts[chat_id].pop(alert_index)
+            save_alerts()  # Save after deleting an alert
             await update.message.reply_text(
                 f"✅ Alert deleted successfully!\n\n"
                 f"Deleted alert for {deleted_alert['token']}\n"
@@ -582,63 +534,6 @@ async def handle_delete_confirmation(update: Update, context: ContextTypes.DEFAU
         )
     
     return CHOOSING
-
-async def handle_token_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle token selection."""
-    user_id = update.effective_user.id
-    
-    if update.message.text == "🔙 Back to Menu":
-        await start(update, context)
-        return CHOOSING
-
-    token_name = update.message.text
-    user_tokens = get_user_tokens(user_id)
-    token_id = user_tokens.get(token_name)
-    
-    if not token_id:
-        await update.message.reply_text(
-            "Invalid selection. Please choose from the keyboard.",
-            reply_markup=get_token_keyboard(user_id)
-        )
-        return TOKEN_SELECTION
-
-    # Store token info
-    context.user_data['token'] = token_name
-    context.user_data['token_id'] = token_id
-
-    # Check if this is a price check or alert setting
-    action = context.user_data.get('action')
-
-    if action == 'set_alert':
-        # Setting an alert
-        price = get_price(token_id)
-        if price:
-            await update.message.reply_text(
-                f"Current price of {token_name} is ${price:,.2f}\n"
-                f"Enter your desired low price alert:",
-                reply_markup=ReplyKeyboardMarkup([["🔙 Back to Menu"]], resize_keyboard=True)
-            )
-        else:
-            await update.message.reply_text(
-                f"Enter your desired low price alert for {token_name}:",
-                reply_markup=ReplyKeyboardMarkup([["🔙 Back to Menu"]], resize_keyboard=True)
-            )
-        return LOW_PRICE
-    else:
-        # Price check
-        await update.message.reply_text("Checking price... Please wait.")
-        price = get_price(token_id)
-        if price:
-            await update.message.reply_text(
-                f"💰 Current price of {token_name}:\n${price:,.2f}",
-                reply_markup=get_main_menu_keyboard()
-            )
-        else:
-            await update.message.reply_text(
-                "Sorry, couldn't fetch the price. Please try again later.",
-                reply_markup=get_main_menu_keyboard()
-            )
-        return CHOOSING
 
 async def handle_low_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle low price input."""
@@ -697,7 +592,9 @@ async def handle_high_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'high_price': high_price
         }
         
+        logging.info(f"Creating new alert for chat_id {chat_id}: {alert}")
         user_alerts[chat_id].append(alert)
+        save_alerts()  # Save alerts after adding new one
         
         await update.message.reply_text(
             f"✅ Alert set successfully!\n\n"
@@ -706,7 +603,7 @@ async def handle_high_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"High Price: ${high_price:,.2f}",
             reply_markup=get_main_menu_keyboard()
         )
-        
+
         context.user_data.clear()
         return CHOOSING
         
@@ -718,85 +615,178 @@ async def handle_high_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return HIGH_PRICE
 
 async def check_alerts(app):
-    """Check price alerts and notify users with a single API request."""
-    if not user_alerts:  # If no alerts exist
-        return
-        
-    # Collect all unique symbols to check
-    symbols_to_check = set()
-    user_alert_mapping = {}  # Keep track of which symbols belong to which alerts
+    """Check price alerts and notify users."""
+    logging.info("Starting alert check...")
     
-    for chat_id, alerts in user_alerts.items():
-        for alert in alerts:
-            symbol = alert['token_id']
-            symbols_to_check.add(symbol)
-            if symbol not in user_alert_mapping:
-                user_alert_mapping[symbol] = []
-            user_alert_mapping[symbol].append((chat_id, alert))
-    
-    if not symbols_to_check:
-        return
-        
-    # Create URL for batch price request
-    symbols_param = str(list(symbols_to_check)).replace("'", '"').replace(" ", "")
-    url = f'https://api.binance.com/api/v3/ticker/price?symbols={symbols_param}'
-    
-    headers = {
-        'accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-    
-    logging.info(f"******************** API Hitting in check alert func ********************:-{url}")
     try:
-        # Fetch all prices in one request
+        if not user_alerts:
+            logging.info("No alerts to check")
+            return
+            
+        logging.info(f"Found alerts for {len(user_alerts)} users")
+
+        # Get current prices
+        symbols_to_check = {alert['token_id'] for alerts in user_alerts.values() for alert in alerts}
+        if not symbols_to_check:
+            return
+
+        symbols_param = str(list(symbols_to_check)).replace("'", '"').replace(" ", "")
+        url = f'https://api.binance.com/api/v3/ticker/price?symbols={symbols_param}'
+        
+        headers = {'accept': 'application/json', 'User-Agent': 'Mozilla/5.0'}
         response = requests.get(url, headers=headers)
-        logging.info(f"Batch API Response Status={response.status_code}")
         
         if response.status_code != 200:
             logging.error(f"Failed to fetch prices: {response.text}")
             return
             
-        data = response.json()
-        
-        # Create price lookup dictionary
-        prices = {item['symbol']: float(item['price']) for item in data}
-        
-        # Check alerts using fetched prices
-        messages_to_send = []
-        for symbol, price_data in prices.items():
-            if symbol in user_alert_mapping:
-                for chat_id, alert in user_alert_mapping[symbol]:
-                    current_price = price_data
+        prices = {item['symbol']: float(item['price']) for item in response.json()}
+        logging.info(f"Fetched prices: {prices}")
+
+        # Process alerts
+        for chat_id, alerts in user_alerts.items():
+            for alert in alerts:
+                symbol = alert['token_id']
+                if symbol not in prices:
+                    continue
                     
+                current_price = prices[symbol]
+                
+                try:
                     if current_price <= alert['low_price']:
-                        messages_to_send.append({
-                            'chat_id': chat_id,
-                            'text': f"⚠️ Low Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
-                                   f"Below your alert of ${alert['low_price']:,.2f}"
-                        })
+                        message = (f"⚠️ Low Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
+                                 f"Below your alert of ${alert['low_price']:,.2f}")
+                        await app.bot.send_message(chat_id=int(chat_id), text=message)
+                        logging.info(f"Sent low price alert to {chat_id}")
+                        
                     elif current_price >= alert['high_price']:
-                        messages_to_send.append({
-                            'chat_id': chat_id,
-                            'text': f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
-                                   f"Above your alert of ${alert['high_price']:,.2f}"
-                        })
-        
-        # Send all messages
-        for msg in messages_to_send:
-            try:
-                asyncio.run(app.bot.send_message(
-                    chat_id=msg['chat_id'],
-                    text=msg['text']
-                ))
-            except Exception as e:
-                logging.error(f"Error sending alert to {msg['chat_id']}: {e}")
+                        message = (f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
+                                 f"Above your alert of ${alert['high_price']:,.2f}")
+                        await app.bot.send_message(chat_id=int(chat_id), text=message)
+                        logging.info(f"Sent high price alert to {chat_id}")
+                except Exception as e:
+                    logging.error(f"Error sending alert to {chat_id}: {e}")
                     
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Network error retrieving prices: {e}")
-    except (ValueError, KeyError) as e:
-        logging.error(f"Error parsing price data: {e}")
     except Exception as e:
-        logging.error(f"Unexpected error in check_alerts: {e}")
+        logging.error(f"Error in check_alerts: {e}", exc_info=True)
+
+def save_alerts():
+    """Save alerts to a JSON file."""
+    try:
+        with open('alerts.json', 'w') as f:
+            json.dump(user_alerts, f)
+        logging.info("Alerts saved successfully")
+    except Exception as e:
+        logging.error(f"Error saving alerts: {e}")
+
+def validate_alerts():
+    """Validate and clean up alerts data."""
+    global user_alerts
+    
+    logging.info("Starting alert validation...")
+    invalid_chat_ids = []
+    
+    if not isinstance(user_alerts, dict):
+        logging.warning("user_alerts is not a dictionary, resetting to empty dict")
+        user_alerts = {}
+        save_alerts()
+        return
+        
+    for chat_id, alerts in user_alerts.items():
+        logging.info(f"Validating alerts for chat_id {chat_id}")
+        
+        # Convert string chat_ids to integers
+        if isinstance(chat_id, str):
+            try:
+                new_chat_id = int(chat_id)
+                user_alerts[new_chat_id] = user_alerts.pop(chat_id)
+                chat_id = new_chat_id
+            except ValueError:
+                invalid_chat_ids.append(chat_id)
+                continue
+        
+        # Validate alert list
+        if not isinstance(alerts, list):
+            invalid_chat_ids.append(chat_id)
+            continue
+            
+        # Filter out invalid alerts
+        valid_alerts = []
+        for alert in alerts:
+            if isinstance(alert, dict) and all(k in alert for k in ['token', 'token_id', 'low_price', 'high_price']):
+                try:
+                    # Verify numeric values
+                    alert['low_price'] = float(alert['low_price'])
+                    alert['high_price'] = float(alert['high_price'])
+                    if alert['low_price'] < alert['high_price']:
+                        valid_alerts.append(alert)
+                except (ValueError, TypeError):
+                    continue
+        
+        if valid_alerts:
+            user_alerts[chat_id] = valid_alerts
+        else:
+            invalid_chat_ids.append(chat_id)
+    
+    # Remove invalid entries
+    for chat_id in invalid_chat_ids:
+        if chat_id in user_alerts:
+            del user_alerts[chat_id]
+    
+    # Save cleaned alerts
+    save_alerts()
+    logging.info(f"Alert validation complete. Valid alerts: {user_alerts}")
+
+def clear_alerts():
+    """Clear all alerts and save empty state."""
+    global user_alerts
+    user_alerts = {}
+    save_alerts()
+    logging.info("All alerts cleared")
+
+def load_alerts():
+    """Load alerts from JSON file."""
+    global user_alerts
+    try:
+        if os.path.exists('alerts.json'):
+            with open('alerts.json', 'r') as f:
+                user_alerts = json.load(f)
+            logging.info(f"Loaded alerts from file: {user_alerts}")
+            validate_alerts()  # Validate after loading
+        else:
+            user_alerts = {}
+            logging.info("No alerts file found, starting with empty alerts")
+            save_alerts()
+    except Exception as e:
+        logging.error(f"Error loading alerts: {e}")
+        user_alerts = {}
+        save_alerts()
+
+async def clear_all_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Command to clear all alerts in the system."""
+    clear_alerts()
+    await update.message.reply_text(
+        "All alerts have been cleared from the system.",
+        reply_markup=get_main_menu_keyboard()
+    )
+
+async def test_alerts(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Test command to manually check alerts."""
+    await update.message.reply_text("Manually checking alerts...")
+    await check_alerts(context.application)
+    await update.message.reply_text("Alert check completed. Check logs for details.")
+
+async def debug_alerts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Debug command to show current alerts."""
+    chat_id = update.effective_chat.id
+    debug_text = (
+        f"Alerts Debug Info:\n\n"
+        f"Your chat_id: {chat_id}\n"
+        f"Your alerts: {user_alerts.get(chat_id, [])}\n"
+        f"All alerts: {json.dumps(user_alerts, indent=2)}\n\n"
+        f"Total users with alerts: {len(user_alerts)}"
+    )
+    await update.message.reply_text(debug_text[:4000])
 
 def main():
     """Initialize and run the bot."""
@@ -807,8 +797,9 @@ def main():
         level=logging.INFO
     )
 
-    # Load custom tokens at startup
+    # Load saved data
     load_custom_tokens()
+    load_alerts()
 
     # Initialize the bot
     app = ApplicationBuilder().token(TOKEN).build()
@@ -817,7 +808,8 @@ def main():
     conv_handler = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
-            CommandHandler("help", help_command)
+            CommandHandler("help", help_command),
+            CommandHandler("test_alerts", test_alerts)
         ],
         states={
             CHOOSING: [
@@ -877,19 +869,62 @@ def main():
         persistent=False
     )
 
-    # Add the conversation handler
+    # Add handlers
     app.add_handler(conv_handler)
+    app.add_handler(CommandHandler("test_alerts", test_alerts))
+    app.add_handler(CommandHandler("debug_alerts", debug_alerts_command))
+    app.add_handler(CommandHandler("clear_alerts", clear_all_alerts))
 
-    # Set up the price check scheduler
+    # Set up error handling
+    async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        logging.error(f"Exception while handling an update: {context.error}")
+        if update and update.message:
+            try:
+                await context.bot.send_message(
+                    chat_id=update.effective_chat.id,
+                    text="Sorry, something went wrong. Please try again.",
+                    reply_markup=get_main_menu_keyboard()
+                )
+            except:
+                pass
+
+    app.add_error_handler(error_handler)
+
+    # Improve menu responsiveness
+    async def handle_invalid_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle any unknown commands or messages."""
+        await update.message.reply_text(
+            "Please use the menu options below:",
+            reply_markup=get_main_menu_keyboard()
+        )
+
+    # Add fallback handler for unknown inputs
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_invalid_input))
+
+    # Set up the scheduler
     scheduler = BackgroundScheduler()
-    scheduler.add_job(lambda: check_alerts(app), 'interval', minutes=1)
+    
+    def run_alerts():
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(check_alerts(app))
+        except Exception as e:
+            logging.error(f"Scheduler error: {e}")
+        finally:
+            try:
+                loop.close()
+            except:
+                pass
+
+    # Add jobs
+    scheduler.add_job(run_alerts, 'interval', minutes=1)
+    scheduler.add_job(save_alerts, 'interval', hours=1)
     scheduler.start()
 
     # Start the bot
     print("Bot is running...")
-    app.run_polling()
-
-
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
