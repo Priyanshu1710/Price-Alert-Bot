@@ -643,7 +643,7 @@ async def check_alerts(app):
         prices = {item['symbol']: float(item['price']) for item in response.json()}
         logging.info(f"Fetched prices: {prices}")
 
-        # Process alerts
+        # Process alerts with delay between messages
         for chat_id, alerts in user_alerts.items():
             for alert in alerts:
                 symbol = alert['token_id']
@@ -656,16 +656,31 @@ async def check_alerts(app):
                     if current_price <= alert['low_price']:
                         message = (f"⚠️ Low Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
                                  f"Below your alert of ${alert['low_price']:,.2f}")
-                        await app.bot.send_message(chat_id=int(chat_id), text=message)
+                        await app.bot.send_message(
+                            chat_id=int(chat_id), 
+                            text=message,
+                            read_timeout=30,
+                            write_timeout=30,
+                            connect_timeout=30
+                        )
+                        await asyncio.sleep(0.5)  # Add delay between messages
                         logging.info(f"Sent low price alert to {chat_id}")
                         
                     elif current_price >= alert['high_price']:
                         message = (f"⚠️ High Price Alert!\n{alert['token']} is now ${current_price:,.2f}\n"
                                  f"Above your alert of ${alert['high_price']:,.2f}")
-                        await app.bot.send_message(chat_id=int(chat_id), text=message)
+                        await app.bot.send_message(
+                            chat_id=int(chat_id), 
+                            text=message,
+                            read_timeout=30,
+                            write_timeout=30,
+                            connect_timeout=30
+                        )
+                        await asyncio.sleep(0.5)  # Add delay between messages
                         logging.info(f"Sent high price alert to {chat_id}")
                 except Exception as e:
                     logging.error(f"Error sending alert to {chat_id}: {e}")
+                    await asyncio.sleep(1)  # Add longer delay after error
                     
     except Exception as e:
         logging.error(f"Error in check_alerts: {e}", exc_info=True)
@@ -802,7 +817,19 @@ def main():
     load_alerts()
 
     # Initialize the bot
-    app = ApplicationBuilder().token(TOKEN).build()
+    # app = ApplicationBuilder().token(TOKEN).build()
+
+      # Initialize the bot with custom connection settings
+    app = (
+        ApplicationBuilder()
+        .token(TOKEN)
+        .connection_pool_size(8)  # Increase connection pool size
+        .pool_timeout(30.0)       # Increase pool timeout
+        .connect_timeout(30.0)    # Increase connect timeout
+        .read_timeout(30.0)       # Increase read timeout
+        .write_timeout(30.0)      # Increase write timeout
+        .build()
+    )
 
     # Create conversation handler
     conv_handler = ConversationHandler(
